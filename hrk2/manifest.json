@@ -1,0 +1,21 @@
+{
+  "name": "Control de Horarios",
+  "short_name": "Control",
+  "description": "Aplicación para registrar ingresos, egresos y activos con escáner.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/4f46e5/ffffff?text=Ctrl",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://placehold.co/512x512/4f46e5/ffffff?text=Control",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Horarios y Activos (para Escáner de Mano)</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .status-late { background-color: #fef2f2; color: #dc2626; }
+        .status-early { background-color: #fffbeb; color: #f59e0b; }
+        .status-overtime { background-color: #ecfdf5; color: #16a34a; }
+        .status-ontime { background-color: #f0fdf4; color: #22c55e; }
+        .status-tool-out { background-color: #eff6ff; color: #3b82f6; }
+        .status-tool-in { background-color: #fafafa; color: #525252; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-6 max-w-5xl">
+
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Sistema de Control de Horarios</h1>
+            <p class="text-gray-500 mt-1">Registra ingresos, egresos y activos mediante escaneo de DNI.</p>
+        </header>
+
+        <!-- Configuration Section -->
+        <section id="config-section" class="bg-white p-6 rounded-2xl shadow-md mb-6">
+            <h2 class="text-xl font-bold mb-4 flex items-center"><i class="fas fa-cogs mr-3 text-gray-500"></i>Configuración de Horarios</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div>
+                    <label for="entryTime" class="block text-sm font-medium text-gray-700">Hora de Ingreso</label>
+                    <input type="time" id="entryTime" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label for="exitTime" class="block text-sm font-medium text-gray-700">Hora de Egreso</label>
+                    <input type="time" id="exitTime" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <button id="saveSchedule" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition transform hover:scale-105">
+                    <i class="fas fa-save mr-2"></i>Guardar Horario
+                </button>
+            </div>
+        </section>
+
+        <!-- Actions Section -->
+        <section id="actions-section" class="bg-white p-6 rounded-2xl shadow-md mb-6">
+             <h2 class="text-xl font-bold mb-4 flex items-center"><i class="fas fa-barcode mr-3 text-gray-500"></i>Acciones de Fichaje</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <button data-action="Ingreso" class="action-btn bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-semibold shadow-sm transition transform hover:-translate-y-1">
+                    <i class="fas fa-sign-in-alt block mx-auto text-2xl mb-2"></i>Registrar Ingreso
+                </button>
+                <button data-action="Egreso" class="action-btn bg-red-500 hover:bg-red-600 text-white p-4 rounded-lg font-semibold shadow-sm transition transform hover:-translate-y-1">
+                    <i class="fas fa-sign-out-alt block mx-auto text-2xl mb-2"></i>Registrar Egreso
+                </button>
+                <button data-action="Retiro de Máquina" class="action-btn bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg font-semibold shadow-sm transition transform hover:-translate-y-1">
+                    <i class="fas fa-toolbox block mx-auto text-2xl mb-2"></i>Retirar Máquina
+                </button>
+                <button data-action="Devolución de Máquina" class="action-btn bg-gray-500 hover:bg-gray-600 text-white p-4 rounded-lg font-semibold shadow-sm transition transform hover:-translate-y-1">
+                    <i class="fas fa-undo block mx-auto text-2xl mb-2"></i>Devolver Máquina
+                </button>
+            </div>
+        </section>
+
+        <!-- Log/History Section -->
+        <section id="log-section" class="bg-white p-6 rounded-2xl shadow-md">
+            <div class="flex flex-wrap justify-between items-center mb-4 gap-3">
+                <h2 class="text-xl font-bold flex items-center"><i class="fas fa-history mr-3 text-gray-500"></i>Historial de Registros</h2>
+                <div class="flex items-center gap-3">
+                     <button id="generateReportBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition transform hover:scale-105">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Generar Reporte con IA ✨
+                    </button>
+                     <button id="exportCSV" class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition transform hover:scale-105">
+                        <i class="fas fa-file-csv mr-2"></i>Exportar a CSV
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y Hora</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DNI</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre Completo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+                 <p id="empty-log-message" class="text-center py-8 text-gray-500 hidden">No hay registros todavía.</p>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Input Modal for Handheld Scanner -->
+    <div id="input-modal" class="modal fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden opacity-0">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95">
+            <div class="p-4 border-b">
+                <h3 id="input-modal-title" class="text-lg font-bold">Escanear DNI</h3>
+            </div>
+            <form id="scan-form" class="p-6">
+                <label for="scan-input" class="block text-sm font-medium text-gray-700 mb-2">Por favor, escanee el código del DNI ahora.</label>
+                <input type="text" id="scan-input" autocomplete="off" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                <p class="text-xs text-gray-500 mt-2">Los datos del escáner aparecerán aquí. Presione Enter o haga clic en Procesar.</p>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" id="cancel-scan-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">Cancelar</button>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Procesar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="report-modal" class="modal fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 hidden opacity-0">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-2xl transform scale-95 max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold">Reporte Generado por IA ✨</h3>
+                <button id="closeReportModal" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            </div>
+            <div id="report-content" class="p-6 overflow-y-auto">
+                <div id="report-loader" class="flex flex-col items-center justify-center h-48">
+                    <div class="loader"></div>
+                    <p class="mt-4 text-gray-600">Analizando datos y generando reporte...</p>
+                </div>
+                <div id="report-text" class="prose max-w-none"></div>
+            </div>
+             <div class="p-4 bg-gray-100 text-right border-t">
+                <button id="closeReportModalBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Cerrar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification/Toast -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50">
+        <p id="toast-message">Mensaje</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const entryTimeInput = document.getElementById('entryTime');
+            const exitTimeInput = document.getElementById('exitTime');
+            const saveScheduleBtn = document.getElementById('saveSchedule');
+            const actionButtons = document.querySelectorAll('.action-btn');
+            const logTableBody = document.getElementById('logTableBody');
+            const exportCSVBtn = document.getElementById('exportCSV');
+            const emptyLogMessage = document.getElementById('empty-log-message');
+            const generateReportBtn = document.getElementById('generateReportBtn');
+
+            // Input Modal Elements
+            const inputModal = document.getElementById('input-modal');
+            const inputModalTitle = document.getElementById('input-modal-title');
+            const scanForm = document.getElementById('scan-form');
+            const scanInput = document.getElementById('scan-input');
+            const cancelScanBtn = document.getElementById('cancel-scan-btn');
+            
+            // Report Modal Elements
+            const reportModal = document.getElementById('report-modal');
+            const closeReportModalBtn = document.getElementById('closeReportModalBtn');
+            const closeReportModalIcon = document.getElementById('closeReportModal');
+            const reportLoader = document.getElementById('report-loader');
+            const reportText = document.getElementById('report-text');
+
+            // Toast Notification
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+
+            // App State
+            let currentAction = '';
+            let logs = JSON.parse(localStorage.getItem('fichajesLogs')) || [];
+            let schedule = JSON.parse(localStorage.getItem('fichajesSchedule')) || { entry: '09:00', exit: '18:00' };
+
+            // --- INITIALIZATION ---
+            const init = () => {
+                loadSchedule();
+                renderLogTable();
+            };
+
+            // --- SCHEDULE MANAGEMENT ---
+            const loadSchedule = () => {
+                entryTimeInput.value = schedule.entry;
+                exitTimeInput.value = schedule.exit;
+            };
+
+            const saveSchedule = () => {
+                if(!entryTimeInput.value || !exitTimeInput.value){
+                    showToast('Por favor, defina la hora de ingreso y egreso.', 'error');
+                    return;
+                }
+                schedule.entry = entryTimeInput.value;
+                schedule.exit = exitTimeInput.value;
+                localStorage.setItem('fichajesSchedule', JSON.stringify(schedule));
+                showToast('Horario guardado correctamente.', 'success');
+            };
+
+            // --- LOG MANAGEMENT ---
+            const renderLogTable = () => {
+                logTableBody.innerHTML = '';
+                if (logs.length === 0) {
+                    emptyLogMessage.classList.remove('hidden');
+                } else {
+                    emptyLogMessage.classList.add('hidden');
+                    const sortedLogs = logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    sortedLogs.forEach(log => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td class="px-6 py-4 whitespace-nowrap">${new Date(log.timestamp).toLocaleString('es-AR')}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${log.dni}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${log.fullName}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">${log.type}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.statusClass}">
+                                    ${log.status}
+                                </span>
+                            </td>
+                        `;
+                        logTableBody.appendChild(row);
+                    });
+                }
+            };
+            
+            const addLog = (dniData, scanTime) => {
+                let status = 'N/A';
+                let statusClass = '';
+                
+                if (currentAction === 'Ingreso' || currentAction === 'Egreso') {
+                    const scheduledEntry = new Date(scanTime);
+                    const [entryH, entryM] = schedule.entry.split(':');
+                    scheduledEntry.setHours(entryH, entryM, 0, 0);
+
+                    const scheduledExit = new Date(scanTime);
+                    const [exitH, exitM] = schedule.exit.split(':');
+                    scheduledExit.setHours(exitH, exitM, 0, 0);
+
+                    if (currentAction === 'Ingreso') {
+                        if (scanTime.getTime() > scheduledEntry.getTime() + (5 * 60 * 1000)) {
+                            status = 'Llegada Tarde';
+                            statusClass = 'status-late';
+                        } else {
+                            status = 'A Tiempo';
+                            statusClass = 'status-ontime';
+                        }
+                    } else if (currentAction === 'Egreso') {
+                        if (scanTime < scheduledExit) {
+                            status = 'Salida Anticipada';
+                            statusClass = 'status-early';
+                        } else if (scanTime.getTime() > scheduledExit.getTime() + (5 * 60 * 1000)) {
+                            status = 'Horas Extras';
+                            statusClass = 'status-overtime';
+                        } else {
+                            status = 'A Tiempo';
+                            statusClass = 'status-ontime';
+                        }
+                    }
+                } else if (currentAction === 'Retiro de Máquina'){
+                    status = 'Retirado';
+                    statusClass = 'status-tool-out';
+                } else { // Devolución
+                    status = 'Devuelto';
+                    statusClass = 'status-tool-in';
+                }
+
+                const newLog = {
+                    timestamp: scanTime.toISOString(),
+                    dni: dniData.dni,
+                    fullName: `${dniData.nombres} ${dniData.apellidos}`,
+                    type: currentAction,
+                    status: status,
+                    statusClass: statusClass
+                };
+
+                logs.push(newLog);
+                localStorage.setItem('fichajesLogs', JSON.stringify(logs));
+                renderLogTable();
+                showToast(`Registro de '${currentAction}' para ${newLog.fullName} exitoso.`, 'success');
+            };
+
+            // --- SCANNER INPUT MANAGEMENT ---
+            const openScanModal = (action) => {
+                currentAction = action;
+                inputModalTitle.textContent = `Registrar: ${currentAction}`;
+                openModal(inputModal);
+                setTimeout(() => {
+                    scanInput.focus(); // Set focus for the handheld scanner
+                }, 100); // Small delay to ensure modal is visible
+            };
+
+            const handleScanSubmit = (event) => {
+                event.preventDefault(); // Prevent page reload
+                const rawText = scanInput.value.trim();
+                if (rawText) {
+                    processScanResult(rawText);
+                }
+                scanInput.value = ''; // Clear input
+                closeModal(inputModal);
+            };
+            
+            const processScanResult = (rawText) => {
+                // Format: Tramite@Apellidos@Nombres@Sexo@DNI@Ejemplar@FechaNac@FechaEmision@...
+                const parts = rawText.split('@');
+                if (parts.length >= 8) {
+                    const dniData = {
+                        apellidos: parts[1],
+                        nombres: parts[2],
+                        dni: parts[4],
+                    };
+                    addLog(dniData, new Date());
+                    playSound();
+                } else {
+                    showToast('Formato de DNI no reconocido. Verifique el escaneo.', 'error');
+                }
+            };
+            
+            // --- GEMINI API REPORT GENERATION ---
+            const generateReport = async () => {
+                if (logs.length === 0) {
+                    showToast("No hay registros para generar un reporte.", "error");
+                    return;
+                }
+
+                openModal(reportModal);
+                reportLoader.style.display = 'flex';
+                reportText.innerHTML = '';
+
+                const prompt = `
+                    Eres un asistente de análisis de recursos humanos. Analiza los siguientes registros de fichajes y gestión de activos y genera un reporte en formato HTML.
+                    El horario laboral es de ${schedule.entry} a ${schedule.exit}.
+                    La fecha y hora actual es ${new Date().toLocaleString('es-AR')}.
+                    
+                    Datos de los registros:
+                    ${JSON.stringify(logs, null, 2)}
+
+                    El reporte debe incluir:
+                    1.  Un **Resumen General** con la cantidad total de registros, ingresos, egresos, y movimientos de activos.
+                    2.  Una sección de **Análisis de Puntualidad**, destacando llegadas tardes recurrentes y salidas anticipadas. Nombra a los empleados si es necesario.
+                    3.  Una sección de **Gestión de Activos**, identificando qué máquinas están actualmente fuera y quién las tiene.
+                    4.  **Observaciones y Recomendaciones** basadas en los patrones que identifiques (ej. sugerir hablar con un empleado por tardanzas, verificar por qué una máquina lleva mucho tiempo fuera, etc.).
+                    
+                    Formatea la respuesta usando etiquetas HTML como <h2> para títulos, <h3> para subtítulos, <p> para texto, <ul> y <li> para listas, y <strong> o <b> para resaltar. No incluyas \`\`\`html.
+                `;
+
+                try {
+                    const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+                    const apiKey = ""; 
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) throw new Error(`Error de API: ${response.statusText}`);
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0) {
+                        reportText.innerHTML = result.candidates[0].content.parts[0].text;
+                    } else {
+                        throw new Error("La respuesta de la API no contiene contenido válido.");
+                    }
+
+                } catch (error) {
+                    console.error("Error al generar el reporte:", error);
+                    reportText.innerHTML = `<p class="text-red-500">No se pudo generar el reporte. Por favor, inténtelo de nuevo más tarde. Error: ${error.message}</p>`;
+                } finally {
+                    reportLoader.style.display = 'none';
+                }
+            };
+
+            // --- UI UTILITIES ---
+            const openModal = (modalElement) => {
+                modalElement.classList.remove('hidden');
+                setTimeout(() => {
+                    modalElement.classList.remove('opacity-0');
+                    modalElement.querySelector('.modal-content').classList.remove('scale-95');
+                }, 10);
+            };
+
+            const closeModal = (modalElement) => {
+                modalElement.classList.add('opacity-0');
+                modalElement.querySelector('.modal-content').classList.add('scale-95');
+                setTimeout(() => modalElement.classList.add('hidden'), 250);
+            };
+
+            const showToast = (message, type = 'success') => {
+                toastMessage.textContent = message;
+                toast.className = `fixed top-5 right-5 text-white py-3 px-5 rounded-lg shadow-xl transition-opacity duration-300 z-50 opacity-100 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+                setTimeout(() => {
+                    toast.classList.replace('opacity-100', 'opacity-0');
+                }, 3000);
+            };
+            
+            const playSound = () => {
+                 try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+                    oscillator.connect(audioContext.destination);
+                    oscillator.start();
+                    setTimeout(() => oscillator.stop(), 150);
+                } catch(e) { console.error("Web Audio API no soportado."); }
+            };
+
+            // --- EXPORT ---
+            const exportToCSV = () => {
+                if (logs.length === 0) {
+                    showToast("No hay registros para exportar.", "error");
+                    return;
+                }
+                const headers = ['Timestamp', 'DNI', 'Nombre Completo', 'Tipo de Registro', 'Estado'];
+                const rows = logs.map(log => [
+                    `"${new Date(log.timestamp).toLocaleString('es-AR')}"`,
+                    `"${log.dni}"`,
+                    `"${log.fullName}"`,
+                    `"${log.type}"`,
+                    `"${log.status}"`
+                ]);
+
+                let csvContent = "data:text/csv;charset=utf-8," 
+                    + headers.join(",") + "\n" 
+                    + rows.map(e => e.join(",")).join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `registros_fichajes_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // --- EVENT LISTENERS ---
+            saveScheduleBtn.addEventListener('click', saveSchedule);
+            actionButtons.forEach(button => {
+                button.addEventListener('click', () => openScanModal(button.dataset.action));
+            });
+            scanForm.addEventListener('submit', handleScanSubmit);
+            cancelScanBtn.addEventListener('click', () => closeModal(inputModal));
+            exportCSVBtn.addEventListener('click', exportToCSV);
+            generateReportBtn.addEventListener('click', generateReport);
+            closeReportModalBtn.addEventListener('click', () => closeModal(reportModal));
+            closeReportModalIcon.addEventListener('click', () => closeModal(reportModal));
+
+            // Start the application
+            init();
+        });
+    </script>
+</body>
+</html>
